@@ -25,7 +25,7 @@ The result is a 0 downtime deployment.
 
     easy_deploy.py deploy --application=myapp instances --stack-name=teststack --hosts=host1,host2 --comment="Deploy to host1 and host2"
 
-    easy_deploy.py --profile=dev deploy --application=myapp all --stack-name=teststack --layer-name=appserver --comment="Deploy to all servers"
+    easy_deploy.py --profile=dev deploy --application=myapp all --stack-name=teststack --layer-name=appserver --comment="Deploy to all servers" --custom_json="{ \"deploy\" : { \"foobar\" : { \"scm\": { \"revision\" : \"5ed93d9976e65e3826d376e2fa724babdb448365\" } } } }"
 
     easy_deploy.py update --no-allow-reboot rolling --stack-name=teststack --layer-name=apiserver --comment="Rolling patch to all apiservers
 
@@ -69,13 +69,16 @@ The list below identifies which options are for which commands.
 * `--hosts`, `-H`: Comma separated list of hostnames to run command on
 * `--stack-name`: OpsWorks stack to run command on
 * `--comment`: Comment to be set on the OpsWorks deployment
-* `--timeout`: (in seconds) Timeout, use this to specify an upper limit to the deployment duration.  If the deploy command exceeds this, the script will exit with error 1.  *Note: if the timeout is exceeded, it will not cancel the already running deployment within OpsWorks.  However it will prevent it from executing a deployment on any further instances*
+* `--custom_json`: file path or json string to include in deployment.
+* `--timeout`: (in seconds) Timeout, use this to specify an upper limit to the deployment duration.  If the deploy command exceeds this,
+the script will exit with error 1.  *Note: if the timeout is exceeded, it will not cancel the already running deployment within OpsWorks.  However it will prevent it from executing a deployment on any further instances*
 
 ### all
 
 * `--exclude-hosts`, `-x`: Comma separated list of hostnames to exclude from command
 * `--layer-name`: OpsWorks layer shortname to run command on (all instances in this layer will get command)
 * `--stack-name`: OpsWorks stack shortname to run command on
+* `--custom_json`: file path or json string to include in deployment.
 * `--timeout`: (in seconds) Timeout, use this to specify an upper limit to the deployment duration.  If the deploy command exceeds this, the script will exit with error 1.  *Note: if the timeout is exceeded, it will not cancel the already running deployment within OpsWorks*
 
 ### rolling
@@ -83,4 +86,5 @@ The list below identifies which options are for which commands.
 * `--exclude-hosts`, `-x`: Comma separated list of hostnames to exclude from command
 * `--layer-name`: OpsWorks layer shortname to run command on (all instances in this layer will get command)
 * `--stack-name`: OpsWorks stack shortname to run command on
+* `--custom_json`: file path or json string to include in deployment.
 * `--timeout`: (in seconds) Timeout, use this to specify an upper limit to the deployment duration.  If the deploy command exceeds this, the script will exit with error 1.  *Note: if the timeout is exceeded, it will not cancel the already running deployment within OpsWorks.  However it will prevent it from executing a deployment on any further instances*
