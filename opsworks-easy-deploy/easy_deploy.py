@@ -86,9 +86,10 @@ class Operation(object):
         self._deploy_to(instance_ids=deployment_instance_ids, name="{0} instances".format(self.layer_name), comment=comment, custom_json=custom_json)
 
     def layer_rolling(self, comment, custom_json):
-        load_balancer_name = self._get_opsworks_elb_name()
+        load_balancer_names = self._get_opsworks_elb_names()
 
-        if load_balancer_name is not None:
+        if len(load_balancer_names) > 0:
+            log("{0} instances are registered to {1} elbs".format(self.layer_name, ", ".join(load_balancer_names)))
             self.pre_deployment_hooks.append(self._remove_instance_from_elb)
             self.post_deployment_hooks.append(self._add_instance_to_elb)
 
@@ -101,7 +102,7 @@ class Operation(object):
             instance_id = each['InstanceId']
             ec2_instance_id = each['Ec2InstanceId']
 
-            self._deploy_to(instance_ids=[instance_id], name=hostname, comment=comment, custom_json=custom_json, load_balancer_name=load_balancer_name, ec2_instance_id=ec2_instance_id)
+            self._deploy_to(instance_ids=[instance_id], name=hostname, comment=comment, custom_json=custom_json, load_balancer_names=load_balancer_names, ec2_instance_id=ec2_instance_id)
 
     def instances_at_once(self, host_names, comment, custom_json):
         all_instances = self._make_api_call('opsworks', 'DescribeInstances', stack_id=self.stack_id)
@@ -113,25 +114,42 @@ class Operation(object):
 
         self._deploy_to(instance_ids=deployment_instance_ids, name=", ".join(host_names), comment=comment, custom_json=custom_json)
 
-    def post_elb_registration(self, hostname, load_balancer_name):
-        describe_result = self._make_api_call('elb', 'DescribeLoadBalancers', load_balancer_names=[load_balancer_name])
-        healthy_threshold = describe_result['LoadBalancerDescriptions'][0]['HealthCheck']['HealthyThreshold']
-        interval = describe_result['LoadBalancerDescriptions'][0]['HealthCheck']['Interval']
+    def post_elb_registration(self, hostname, load_balancer_names):
+        timeout = 0
+        describe_result = self._make_api_call('elb', 'DescribeLoadBalancers', load_balancer_names=load_balancer_names)
+        for load_balancer_desc in describe_result['LoadBalancerDescriptions']:
+            healthy_threshold = load_balancer_desc['HealthCheck']['HealthyThreshold']
+            interval = load_balancer_desc['HealthCheck']['Interval']
 
-        instance_healthy_wait = (healthy_threshold * interval)
-        log("Added {0} to ELB {1}.  Sleeping for {2} seconds for it to be online".format(hostname, load_balancer_name, instance_healthy_wait))
-        time.sleep(instance_healthy_wait)
+            instance_healthy_wait = (healthy_threshold * interval)
+            timeout = max(timeout, instance_healthy_wait)
 
-    def _get_opsworks_elb_name(self):
+        log("Added {0} to ELB {1}.  Sleeping for {2} seconds for it to be online".format(hostname, ','.join(load_balancer_names), timeout))
+        time.sleep(timeout)
+
+    def _get_opsworks_elb_names(self):
         """
         Get an OpsWorks ELB Name of the layer id in the stack if is associated with the layer
         :return: Elastic Load Balancer name if associated with the layer, otherwise None
         """
         elbs = self._make_api_call('opsworks', 'DescribeElasticLoadBalancers', layer_ids=[self.layer_id])
-        if len(elbs['ElasticLoadBalancers']) > 0:
-            return elbs['ElasticLoadBalancers'][0]['ElasticLoadBalancerName']
-        else:
-            return None
+        load_balancer_names = []
+        if len(elbs.get('ElasticLoadBalancers', [])) > 0:
+            load_balancer_names.append(elbs['ElasticLoadBalancers'][0]['ElasticLoadBalancerName'])
+        layer_instances = self._make_api_call('opsworks', 'DescribeInstances', layer_id=self.layer_id)
+        ec2_ids = []
+        for layer_instance in layer_instances['Instances']:
+            ec2_ids.append(layer_instance.get('Ec2InstanceId', []))
+        elbs = self._make_api_call('opsworks', 'DescribeElasticLoadBalancers', stack_id=self.stack_id)
+        for elb in elbs.get('ElasticLoadBalancers', []):
+            if elb['ElasticLoadBalancerName'] in load_balancer_names:
+                continue
+            for elb_instance in elb.get('Ec2InstanceIds', []):
+                if elb_instance in ec2_ids:
+                    load_balancer_names.append(elb['ElasticLoadBalancerName'])
+                    break
+        return load_balancer_names
+
 
     def _deploy_to(self, **kwargs):
         for pre_deploy in self.pre_deployment_hooks:
@@ -189,36 +207,45 @@ class Operation(object):
         return completed_at - started_at
 
     def _add_instance_to_elb(self, **kwargs):
-        self._make_api_call('elb', 'RegisterInstancesWithLoadBalancer',
-                            load_balancer_name=kwargs['load_balancer_name'],
-                            instances=[{'InstanceId': kwargs['ec2_instance_id']}])
 
-        self.post_elb_registration(kwargs['name'], kwargs['load_balancer_name'])
+        for load_balancer_name in kwargs['load_balancer_names']:
+            self._make_api_call('elb', 'RegisterInstancesWithLoadBalancer',
+                                load_balancer_name=load_balancer_name,
+                                instances=[{'InstanceId': kwargs['ec2_instance_id']}])
 
-        if not self._is_instance_healthy(kwargs['load_balancer_name'], kwargs['ec2_instance_id']):
-            log("Instance {0} did not come online after deploy. Aborting remaining deployment".format(kwargs['name']))
-            sys.exit(1)
+        self.post_elb_registration(kwargs['name'], kwargs['load_balancer_names'])
+
+
+        for load_balancer_name in kwargs['load_balancer_names']:
+            if not self._is_instance_healthy(load_balancer_name, kwargs['ec2_instance_id']):
+                log("Instance {0} did not come online after deploy. Aborting remaining deployment".format(kwargs['name']))
+                sys.exit(1)
 
     def _remove_instance_from_elb(self, **kwargs):
-        deregister_response = self._make_api_call('elb', 'DeregisterInstancesFromLoadBalancer',
-                                                  load_balancer_name=kwargs['load_balancer_name'],
-                                                  instances=[{'InstanceId': kwargs['ec2_instance_id']}])
-        log("Removed {0} from ELB {1}. There are still {2} instance(s) online".format(kwargs['name'], kwargs['load_balancer_name'], len(deregister_response['Instances'])))
+        for load_balancer_name in kwargs['load_balancer_names']:
 
-        self._wait_for_elb(kwargs['load_balancer_name'])
+            deregister_response = self._make_api_call('elb', 'DeregisterInstancesFromLoadBalancer',
+                                                      load_balancer_name=load_balancer_name,
+                                                      instances=[{'InstanceId': kwargs['ec2_instance_id']}])
+            log("Removed {0} from ELB {1}. There are still {2} instance(s) online".format(kwargs['name'], load_balancer_name, len(deregister_response['Instances'])))
 
-    def _wait_for_elb(self, load_balancer_name):
-        elb_attributes = self._make_api_call('elb', 'DescribeLoadBalancerAttributes',
-                                             load_balancer_name=load_balancer_name)
-        if 'ConnectionDraining' in elb_attributes['LoadBalancerAttributes']:
-            connection_draining = elb_attributes['LoadBalancerAttributes']['ConnectionDraining']
-            if connection_draining['Enabled']:
-                log("Connection Draining enabled - sleeping for {0} seconds".format(connection_draining['Timeout']))
-                time.sleep(connection_draining['Timeout'])
-                return
+        self._wait_for_elb(kwargs['load_balancer_names'])
 
-        log("Connection Draining not enabled - sleeping for 20 seconds")
-        time.sleep(20)
+    def _wait_for_elb(self, load_balancer_names):
+        timeout = 0
+        for load_balancer_name in load_balancer_names:
+            elb_attributes = self._make_api_call('elb', 'DescribeLoadBalancerAttributes',
+                                                 load_balancer_name=load_balancer_name)
+            if 'ConnectionDraining' in elb_attributes['LoadBalancerAttributes']:
+                connection_draining = elb_attributes['LoadBalancerAttributes']['ConnectionDraining']
+                if connection_draining['Enabled']:
+                    timeout = max(timeout, int(connection_draining['Timeout']))
+        if timeout > 0:
+            log("Connection Draining enabled - sleeping for {0} seconds".format(timeout))
+            time.sleep(timeout)
+        else:
+            log("Connection Draining not enabled - sleeping for 20 seconds")
+            time.sleep(20)
 
     def _is_instance_healthy(self, load_balancer_name, instance_id):
         instance_health = self._make_api_call('elb', 'DescribeInstanceHealth',
