@@ -15,7 +15,7 @@ in turn.  If the layer is also associated with an Elastic Load Balancer, it will
 wait for the ELB's ConnectionDraining Timeout setting (if enabled, otherwise 20 seconds) and then initiate the deployment.
 
 Once the deployment is complete - it will register the instance back in the ELB.  The script will read the
-ELB `HealthCheck` configuration and wait for the `HealthyThreshold * Interval` seconds for the instance to be online.
+ELB `HealthCheck` configuration and wait for `(HealthyThreshold + 2) * Interval` seconds for the instance to be online.
 
 Once complete, it will move on to the next instance in the ELB and perform the same steps.
 
