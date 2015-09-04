@@ -88,3 +88,7 @@ the script will exit with error 1.  *Note: if the timeout is exceeded, it will n
 * `--stack-name`: OpsWorks stack shortname to run command on
 * `--custom_json`: file path or json string to include in deployment.
 * `--timeout`: (in seconds) Timeout, use this to specify an upper limit to the deployment duration.  If the deploy command exceeds this, the script will exit with error 1.  *Note: if the timeout is exceeded, it will not cancel the already running deployment within OpsWorks.  However it will prevent it from executing a deployment on any further instances*
+
+## TODO
+
+* support multiple layers with a single command for both rolling and all deploy scenarios
