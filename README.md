@@ -35,6 +35,16 @@ The result is a 0 downtime deployment.
 
     opsworks-easy-deploy update --allow-reboot all --stack-name=teststack --layer-name=appserver --comment="Applying kernel patches to all servers"
 
+## Installation
+
+```
+$ git clone https://github.com/HireIQ/opsworks-easy-deploy.git
+$ cd opsworks-easy-deploy
+$ virtualenv ./venv
+$ . ./venv/bin/activate
+$ pip install .
+```
+
 ## Configuration
 
 This script shares the same configuration used by the [AWS CLI](https://github.com/aws/aws-cli).  You can either specify your credentials via:
