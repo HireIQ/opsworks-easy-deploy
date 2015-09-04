@@ -23,17 +23,17 @@ The result is a 0 downtime deployment.
 
 ## Examples
 
-    easy_deploy.py deploy --application=myapp rolling --stack-name=teststack --layer-name=apiserver --comment="Rolling deployment to all apiservers" --timeout=300
+    opsworks-easy-deploy deploy --application=myapp rolling --stack-name=teststack --layer-name=apiserver --comment="Rolling deployment to all apiservers" --timeout=300
 
-    easy_deploy.py deploy --application=myapp instances --stack-name=teststack --hosts=host1,host2 --comment="Deploy to host1 and host2"
+    opsworks-easy-deploy deploy --application=myapp instances --stack-name=teststack --hosts=host1,host2 --comment="Deploy to host1 and host2"
 
-    easy_deploy.py --profile=dev deploy --application=myapp all --stack-name=teststack --layer-name=appserver --comment="Deploy to all servers" --custom_json="{ \"deploy\" : { \"foobar\" : { \"scm\": { \"revision\" : \"5ed93d9976e65e3826d376e2fa724babdb448365\" } } } }"
+    opsworks-easy-deploy --profile=dev deploy --application=myapp all --stack-name=teststack --layer-name=appserver --comment="Deploy to all servers" --custom_json="{ \"deploy\" : { \"foobar\" : { \"scm\": { \"revision\" : \"5ed93d9976e65e3826d376e2fa724babdb448365\" } } } }"
 
-    easy_deploy.py update --no-allow-reboot rolling --stack-name=teststack --layer-name=apiserver --comment="Rolling patch to all apiservers
+    opsworks-easy-deploy update --no-allow-reboot rolling --stack-name=teststack --layer-name=apiserver --comment="Rolling patch to all apiservers
 
-    easy_deploy.py update --allow-reboot --amazon-linux-release=2014.09 instances --stack-name=teststack --hosts=host1,host2 --comment="Updating host1 and host2 to latest Amazon Linux"
+    opsworks-easy-deploy update --allow-reboot --amazon-linux-release=2014.09 instances --stack-name=teststack --hosts=host1,host2 --comment="Updating host1 and host2 to latest Amazon Linux"
 
-    easy_deploy.py update --allow-reboot all --stack-name=teststack --layer-name=appserver --comment="Applying kernel patches to all servers"
+    opsworks-easy-deploy update --allow-reboot all --stack-name=teststack --layer-name=appserver --comment="Applying kernel patches to all servers"
 
 ## Configuration
 
