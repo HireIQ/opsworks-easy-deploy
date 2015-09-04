@@ -137,6 +137,8 @@ class Operation(object):
         describe_result = self._make_api_call('elb', 'describe_load_balancers', LoadBalancerNames=load_balancer_names)
         for load_balancer_desc in describe_result['LoadBalancerDescriptions']:
             healthy_threshold = load_balancer_desc['HealthCheck']['HealthyThreshold']
+            # give the healthy_threshold 2 more intervals to be sure we just don't time out too soon
+            healthy_threshold += 2
             interval = load_balancer_desc['HealthCheck']['Interval']
 
             instance_healthy_wait = (healthy_threshold * interval)
