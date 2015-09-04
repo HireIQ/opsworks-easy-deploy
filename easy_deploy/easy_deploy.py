@@ -477,5 +477,9 @@ def instances(ctx, stack_name, hosts, comment, timeout, custom_json):
     operation.instances_at_once(comment=comment, host_names=hosts, custom_json=custom_json)
 
 
-if __name__ == '__main__':
+def main():
     cli(obj={})
+
+
+if __name__ == '__main__':
+    main()
