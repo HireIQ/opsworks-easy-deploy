@@ -48,6 +48,7 @@ class Operation(object):
             'opsworks': context.obj['OPSWORKS_REGION'],
             'elb': context.obj['ELB_REGION']
         }
+        self.clients = {}
         self.stack_name = None
         self.layer_name = None
         self.deploy_timeout = None
@@ -65,7 +66,7 @@ class Operation(object):
     @property
     def stack_id(self):
         if self._stack_id is None:
-            stacks = self._make_api_call('opsworks', 'DescribeStacks')['Stacks']
+            stacks = self._make_api_call('opsworks', 'describe_stacks')['Stacks']
             for stack in stacks:
                 stack_id = stack['StackId']
                 if self.stack_name == stack['Name'].lower():
@@ -79,7 +80,7 @@ class Operation(object):
     @property
     def layer_id(self):
         if self._layer_id is None:
-            layers = self._make_api_call('opsworks', 'DescribeLayers', stack_id=self.stack_id)['Layers']
+            layers = self._make_api_call('opsworks', 'describe_layers', StackId=self.stack_id)['Layers']
             for each_layer in layers:
                 layer_id = each_layer['LayerId']
                 if self.layer_name == each_layer['Name'].lower():
@@ -91,7 +92,7 @@ class Operation(object):
         return self._layer_id
 
     def layer_at_once(self, comment, custom_json, exclude_hosts=None):
-        all_instances = self._make_api_call('opsworks', 'DescribeInstances', layer_id=self.layer_id)
+        all_instances = self._make_api_call('opsworks', 'describe_instances', LayerId=self.layer_id)
 
         if exclude_hosts is None:
             exclude_hosts = []
@@ -110,7 +111,7 @@ class Operation(object):
             self.pre_deployment_hooks.append(self._remove_instance_from_elb)
             self.post_deployment_hooks.append(self._add_instance_to_elb)
 
-        all_instances = self._make_api_call('opsworks', 'DescribeInstances', layer_id=self.layer_id)
+        all_instances = self._make_api_call('opsworks', 'describe_instances', LayerId=self.layer_id)
         for each in all_instances['Instances']:
             if each['Status'] != 'online':
                 continue
@@ -122,7 +123,7 @@ class Operation(object):
             self._deploy_to(instance_ids=[instance_id], name=hostname, comment=comment, custom_json=custom_json, load_balancer_names=load_balancer_names, ec2_instance_id=ec2_instance_id)
 
     def instances_at_once(self, host_names, comment, custom_json):
-        all_instances = self._make_api_call('opsworks', 'DescribeInstances', stack_id=self.stack_id)
+        all_instances = self._make_api_call('opsworks', 'describe_instances', StackId=self.stack_id)
 
         deployment_instance_ids = []
         for each in all_instances['Instances']:
@@ -133,7 +134,7 @@ class Operation(object):
 
     def post_elb_registration(self, hostname, load_balancer_names):
         timeout = 0
-        describe_result = self._make_api_call('elb', 'DescribeLoadBalancers', load_balancer_names=load_balancer_names)
+        describe_result = self._make_api_call('elb', 'describe_load_balancers', LoadBalancerNames=load_balancer_names)
         for load_balancer_desc in describe_result['LoadBalancerDescriptions']:
             healthy_threshold = load_balancer_desc['HealthCheck']['HealthyThreshold']
             interval = load_balancer_desc['HealthCheck']['Interval']
@@ -149,15 +150,15 @@ class Operation(object):
         Get an OpsWorks ELB Name of the layer id in the stack if is associated with the layer
         :return: Elastic Load Balancer name if associated with the layer, otherwise None
         """
-        elbs = self._make_api_call('opsworks', 'DescribeElasticLoadBalancers', layer_ids=[self.layer_id])
+        elbs = self._make_api_call('opsworks', 'describe_elastic_load_balancers', LayerIds=[self.layer_id])
         load_balancer_names = []
         if len(elbs.get('ElasticLoadBalancers', [])) > 0:
             load_balancer_names.append(elbs['ElasticLoadBalancers'][0]['ElasticLoadBalancerName'])
-        layer_instances = self._make_api_call('opsworks', 'DescribeInstances', layer_id=self.layer_id)
+        layer_instances = self._make_api_call('opsworks', 'describe_instances', LayerId=self.layer_id)
         ec2_ids = []
         for layer_instance in layer_instances['Instances']:
             ec2_ids.append(layer_instance.get('Ec2InstanceId', []))
-        elbs = self._make_api_call('opsworks', 'DescribeElasticLoadBalancers', stack_id=self.stack_id)
+        elbs = self._make_api_call('opsworks', 'describe_elastic_load_balancers', StackId=self.stack_id)
         for elb in elbs.get('ElasticLoadBalancers', []):
             if elb['ElasticLoadBalancerName'] in load_balancer_names:
                 continue
@@ -173,7 +174,7 @@ class Operation(object):
             pre_deploy(**kwargs)
 
         arguments = self._create_deployment_arguments(kwargs['instance_ids'], kwargs['comment'], kwargs['custom_json'])
-        deployment = self._make_api_call('opsworks', 'CreateDeployment', **arguments)
+        deployment = self._make_api_call('opsworks', 'create_deployment', **arguments)
 
         deployment_id = deployment['DeploymentId']
         log("Deployment {0} to {1} requested - command: {2}".format(deployment_id, kwargs['name'], self.command))
@@ -189,7 +190,7 @@ class Operation(object):
     def _poll_deployment_complete(self, deployment_id):
         start_time = time.time()
         while True:
-            deployment_status = self._make_api_call('opsworks', 'DescribeDeployments', deployment_ids=[deployment_id])
+            deployment_status = self._make_api_call('opsworks', 'describe_deployments', DeploymentIds=[deployment_id])
 
             for each in deployment_status['Deployments']:
                 if each['DeploymentId'] == deployment_id:
@@ -226,9 +227,9 @@ class Operation(object):
     def _add_instance_to_elb(self, **kwargs):
 
         for load_balancer_name in kwargs['load_balancer_names']:
-            self._make_api_call('elb', 'RegisterInstancesWithLoadBalancer',
-                                load_balancer_name=load_balancer_name,
-                                instances=[{'InstanceId': kwargs['ec2_instance_id']}])
+            self._make_api_call('elb', 'register_instances_with_load_balancer',
+                                LoadBalancerName=load_balancer_name,
+                                Instances=[{'InstanceId': kwargs['ec2_instance_id']}])
 
         self.post_elb_registration(kwargs['name'], kwargs['load_balancer_names'])
 
@@ -241,9 +242,9 @@ class Operation(object):
     def _remove_instance_from_elb(self, **kwargs):
         for load_balancer_name in kwargs['load_balancer_names']:
 
-            deregister_response = self._make_api_call('elb', 'DeregisterInstancesFromLoadBalancer',
-                                                      load_balancer_name=load_balancer_name,
-                                                      instances=[{'InstanceId': kwargs['ec2_instance_id']}])
+            deregister_response = self._make_api_call('elb', 'deregister_instances_from_load_balancer',
+                                                      LoadBalancerName=load_balancer_name,
+                                                      Instances=[{'InstanceId': kwargs['ec2_instance_id']}])
             log("Removed {0} from ELB {1}. There are still {2} instance(s) online".format(kwargs['name'], load_balancer_name, len(deregister_response['Instances'])))
 
         self._wait_for_elb(kwargs['load_balancer_names'])
@@ -251,8 +252,8 @@ class Operation(object):
     def _wait_for_elb(self, load_balancer_names):
         timeout = 0
         for load_balancer_name in load_balancer_names:
-            elb_attributes = self._make_api_call('elb', 'DescribeLoadBalancerAttributes',
-                                                 load_balancer_name=load_balancer_name)
+            elb_attributes = self._make_api_call('elb', 'describe_load_balancer_attributes',
+                                                 LoadBalancerName=load_balancer_name)
             if 'ConnectionDraining' in elb_attributes['LoadBalancerAttributes']:
                 connection_draining = elb_attributes['LoadBalancerAttributes']['ConnectionDraining']
                 if connection_draining['Enabled']:
@@ -265,9 +266,9 @@ class Operation(object):
             time.sleep(20)
 
     def _is_instance_healthy(self, load_balancer_name, instance_id):
-        instance_health = self._make_api_call('elb', 'DescribeInstanceHealth',
-                                              load_balancer_name=load_balancer_name,
-                                              instances=[{'InstanceId': instance_id}])
+        instance_health = self._make_api_call('elb', 'describe_instance_health',
+                                              LoadBalancerName=load_balancer_name,
+                                              Instances=[{'InstanceId': instance_id}])
 
         for each in instance_health['InstanceStates']:
             if each['InstanceId'] == instance_id:
@@ -279,6 +280,13 @@ class Operation(object):
 
         return False
 
+    def _build_client(self, service_name, region_name='us-east-1'):
+        client = self.session.create_client(service_name, region_name=region_name)
+        self.clients.update({
+            service_name: client,
+        })
+        return client
+
     def _make_api_call(self, service_name, api_operation, **kwargs):
         """
         Make an API call using botocore for the given service and api operation.
@@ -287,15 +295,11 @@ class Operation(object):
         :param kwargs: Any additional arguments to be passed to the service call
         :return: If an OK response returned, returns the data from the call.  Will exit(1) otherwise
         """
-        service = self.session.get_service(service_name)
-        endpoint_region = self.service_endpoints.get(service_name, 'us-east-1')
-        endpoint = service.get_endpoint(endpoint_region)
-        operation = service.get_operation(api_operation)
-        response, response_data = operation.call(endpoint, **kwargs)
-        if response.ok:
-            return response_data
-
-        log("Error occurred calling {0} - {1} - Status {2} Message {3}".format(response.url, api_operation, response.status_code, response.text))
+        service_client = self.clients.get(service_name, self._build_client(service_name))
+        response = getattr(service_client, api_operation)(**kwargs)
+        if response.get('ResponseMetadata', {}).get('HTTPStatusCode') == 200:
+            return response
+        log("Error occurred calling {} on {} - full response:\n{}".format(api_operation, service_name, response))
         sys.exit(1)
 
 
@@ -335,11 +339,11 @@ class Update(Operation):
         parsed_json = parse_custom_json(custom_json)
         custom.update(parsed_json)
         return {
-            'stack_id': self.stack_id,
-            'instance_ids': instance_ids,
-            'command': {'Name': self.command},
-            'comment': comment,
-            'custom_json': json.dumps(custom)
+            'StackId': self.stack_id,
+            'InstanceIds': instance_ids,
+            'Command': {'Name': self.command},
+            'Comment': comment,
+            'CustomJson': json.dumps(custom)
         }
 
 
@@ -360,7 +364,7 @@ class Deploy(Operation):
     @property
     def application_id(self):
         if self._application_id is None:
-            applications = self._make_api_call('opsworks', 'DescribeApps', stack_id=self.stack_id)
+            applications = self._make_api_call('opsworks', 'describe_apps', StackId=self.stack_id)
             for each in applications['Apps']:
                 if each['Shortname'] == self.application_name:
                     self._application_id = each['AppId']
@@ -375,12 +379,12 @@ class Deploy(Operation):
     def _create_deployment_arguments(self, instance_ids, comment, custom_json):
         parsed_json = parse_custom_json(custom_json)
         return {
-            'stack_id': self.stack_id,
-            'app_id': self.application_id,
-            'instance_ids': instance_ids,
-            'command': {'Name': self.command},
-            'comment': comment,
-            'custom_json': json.dumps(parsed_json)
+            'StackId': self.stack_id,
+            'AppId': self.application_id,
+            'InstanceIds': instance_ids,
+            'Command': {'Name': self.command},
+            'Comment': comment,
+            'CustomJson': json.dumps(parsed_json)
         }
 
 
