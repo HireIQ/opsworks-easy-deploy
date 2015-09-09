@@ -105,6 +105,7 @@ the script will exit with error 1.  *Note: if the timeout is exceeded, it will n
 
 * ~~update to work with latest versions of botocore~~ done
 * support multiple layers with a single command for both rolling and all deploy scenarios
+* add a "safe restart" command to deregister & restart instance(s)
 
 ## Acknowledgements
 
