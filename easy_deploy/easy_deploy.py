@@ -110,7 +110,7 @@ class Operation(object):
             self._detach_elb_from_layer(load_balancer_names=load_balancer_names, layer_id=self.layer_id)
 
         if len(load_balancer_names) > 0:
-            log("{0} instances are registered to {1} elbs".format(self.layer_name, ", ".join(load_balancer_names)))
+            log("{0} instances are registered to the following elbs: {1}".format(self.layer_name, ", ".join(load_balancer_names)))
             self.pre_deployment_hooks.append(self._remove_instance_from_elb)
             self.post_deployment_hooks.append(self._add_instance_to_elb)
 
