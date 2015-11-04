@@ -103,11 +103,14 @@ class Operation(object):
                 deployment_instance_ids.append(each['InstanceId'])
         self._deploy_to(instance_ids=deployment_instance_ids, name="{0} instances".format(self.layer_name), comment=comment, custom_json=custom_json)
 
-    def layer_rolling(self, comment, custom_json):
+    def layer_rolling(self, comment, custom_json, manage_layer_elbs):
         load_balancer_names = self._get_opsworks_elb_names()
 
+        if manage_layer_elbs:
+            self._detach_elb_from_layer(load_balancer_names=load_balancer_names, layer_id=self.layer_id)
+
         if len(load_balancer_names) > 0:
-            log("{0} instances are registered to {1} elbs".format(self.layer_name, ", ".join(load_balancer_names)))
+            log("{0} instances are registered to the following elbs: {1}".format(self.layer_name, ", ".join(load_balancer_names)))
             self.pre_deployment_hooks.append(self._remove_instance_from_elb)
             self.post_deployment_hooks.append(self._add_instance_to_elb)
 
@@ -121,6 +124,9 @@ class Operation(object):
             ec2_instance_id = each['Ec2InstanceId']
 
             self._deploy_to(instance_ids=[instance_id], name=hostname, comment=comment, custom_json=custom_json, load_balancer_names=load_balancer_names, ec2_instance_id=ec2_instance_id)
+
+        if manage_layer_elbs:
+            self._attach_elb_to_layer(load_balancer_names=load_balancer_names, layer_id=self.layer_id)
 
     def instances_at_once(self, host_names, comment, custom_json):
         all_instances = self._make_api_call('opsworks', 'describe_instances', StackId=self.stack_id)
@@ -225,6 +231,25 @@ class Operation(object):
         started_at = arrow.get(deployment_status['CreatedAt'])
         completed_at = arrow.get(deployment_status['CompletedAt'])
         return completed_at - started_at
+
+    def _detach_elb_from_layer(self, **kwargs):
+        layer_id = kwargs['layer_id']
+        for load_balancer_name in kwargs['load_balancer_names']:
+            log("Detaching ELB {} from layer {}".format(load_balancer_name, layer_id))
+            self._make_api_call('opsworks', 'detach_elastic_load_balancer',
+                                ElasticLoadBalancerName=load_balancer_name,
+                                LayerId=layer_id)
+
+    def _attach_elb_to_layer(self, **kwargs):
+        """
+        Note that attaching an ELB to a layer will trigger a configure event
+        """
+        layer_id = kwargs['layer_id']
+        for load_balancer_name in kwargs['load_balancer_names']:
+            log("Re-attaching ELB {} to layer {}".format(load_balancer_name, layer_id))
+            self._make_api_call('opsworks', 'attach_elastic_load_balancer',
+                                ElasticLoadBalancerName=load_balancer_name,
+                                LayerId=layer_id)
 
     def _add_instance_to_elb(self, **kwargs):
 
@@ -456,11 +481,13 @@ def all(ctx, stack_name, layer_name, exclude_hosts, comment, timeout, custom_jso
 @click.option('--comment', help='Deployment message')
 @click.option('--timeout', default=None, help='Deployment timeout')
 @click.option('--custom_json', default=None, help='Custom json filepath or native json string')
+@click.option('--manage-layer-elbs', default=False, is_flag=True, help='Detach any ELBs from this layer while deployment'
+              ' is running and re-attach when deployment has successfully completed.')
 @click.pass_context
-def rolling(ctx, stack_name, layer_name, comment, timeout, custom_json):
+def rolling(ctx, stack_name, layer_name, comment, timeout, custom_json, manage_layer_elbs):
     operation = ctx.obj['OPERATION']
     operation.init(stack_name=stack_name, layer_name=layer_name, timeout=timeout)
-    operation.layer_rolling(comment=comment, custom_json=custom_json)
+    operation.layer_rolling(comment=comment, custom_json=custom_json, manage_layer_elbs=manage_layer_elbs)
 
 
 @cli.command(help='Execute operation on specific hosts')
