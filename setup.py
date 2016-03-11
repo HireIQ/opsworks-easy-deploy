@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name='opsworks-easy-deploy',
-    version='1.1.0',
+    version='1.2.0',
     packages=['easy_deploy'],
     install_requires=[
         'botocore==1.2.0',
