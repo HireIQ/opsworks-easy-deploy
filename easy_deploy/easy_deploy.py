@@ -107,6 +107,9 @@ class Operation(object):
         load_balancer_names = self._get_opsworks_elb_names()
 
         if manage_layer_elbs:
+            if not load_balancer_names:
+                log("manage-layer-elbs flag was used - but no ELBs were found on the specified layer {}! Aborting".format(self.layer_name))
+                sys.exit(1)
             self._detach_elb_from_layer(load_balancer_names=load_balancer_names, layer_id=self.layer_id)
 
         if len(load_balancer_names) > 0:
