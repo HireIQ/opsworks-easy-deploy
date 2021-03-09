@@ -6,9 +6,9 @@ setup(
     version='1.2.0',
     packages=['easy_deploy'],
     install_requires=[
-        'botocore==1.2.0',
-        'click==5.1',
-        'arrow==0.6.0',
+        'botocore==1.20.23',
+        'click==7.1.2',
+        'arrow==1.0.3',
     ],
     entry_points={
         'console_scripts': [
