@@ -217,7 +217,7 @@ class Operation(object):
                     continue
 
             elapsed_time = time.time() - start_time
-            if self.deploy_timeout is not None and elapsed_time > self.deploy_timeout:
+            if bool(self.deploy_timeout) and elapsed_time > float(self.deploy_timeout):
                 log("Deployment {0} has exceeded the timeout of {1} seconds.  Aborting".format(deployment_id, self.deploy_timeout))
                 sys.exit(1)
             time.sleep(20)
